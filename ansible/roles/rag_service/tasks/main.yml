@@ -33,6 +33,20 @@
     group: "1000"
     mode: "0750"
 
+# Required before jol-rag.service starts: systemd fails namespace setup
+# (status=226) if any ReadWritePaths entry is missing. Containers run as
+# uid 1000 (qdrant/minio images), so match ownership.
+- name: Create container data directories (Qdrant, MinIO)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0750"
+  loop:
+    - "{{ qdrant_data_dir }}"
+    - "{{ minio_data_dir }}"
+
 # --- Firewall rules (UFW) ---
 - name: Allow RAG API port from internal network
   community.general.ufw:
@@ -84,6 +98,41 @@
     remote_src: true
   when: not rag_env_file.stat.exists
 
+# --- Deploy application source (rsync from control node) ---
+# Must run before the systemd unit starts: compose builds rag-api/rag-worker
+# from ./src, so the build context has to exist first.
+- name: Synchronise RAG application source
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../src/"
+    dest: "{{ rag_app_dir }}/src/"
+    delete: true
+    # VLAN 40 is only reachable via ProxyJump (see inventory); synchronize
+    # defaults to 'ssh -S none' which drops both config and ssh_common_args.
+    use_ssh_args: true
+    rsync_path: "sudo rsync"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=.pytest_cache"
+  notify: restart rag stack
+
+# --- Deploy monitoring assets (filebeat config for SIEM shipping) ---
+- name: Synchronise monitoring assets
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../monitoring/"
+    dest: "{{ rag_app_dir }}/monitoring/"
+    delete: true
+    use_ssh_args: true
+    rsync_path: "sudo rsync"
+
+# --- Deploy operational scripts (backup-qdrant.sh used by cron job) ---
+- name: Synchronise operational scripts
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../scripts/"
+    dest: "{{ rag_app_dir }}/scripts/"
+    delete: true
+    use_ssh_args: true
+    rsync_path: "sudo rsync"
+
 # --- Deploy systemd service unit ---
 - name: Deploy systemd service for RAG stack
   ansible.builtin.template:
@@ -112,21 +161,3 @@
     job: "{{ rag_app_dir }}/scripts/backup-qdrant.sh >> {{ rag_audit_log_dir }}/backup.log 2>&1"
     user: root
     state: present
-
-# --- Deploy application source (rsync from control node) ---
-- name: Synchronise RAG application source
-  ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../src/"
-    dest: "{{ rag_app_dir }}/src/"
-    delete: true
-    rsync_opts:
-      - "--exclude=__pycache__"
-      - "--exclude=.pytest_cache"
-  notify: restart rag stack
-
-# --- Deploy monitoring assets (filebeat config for SIEM shipping) ---
-- name: Synchronise monitoring assets
-  ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../monitoring/"
-    dest: "{{ rag_app_dir }}/monitoring/"
-    delete: true

@@ -14,7 +14,8 @@ services:
       - "127.0.0.1:{{ qdrant_port }}:6333"
       - "127.0.0.1:{{ qdrant_grpc_port }}:6334"
     volumes:
-      - "{{ qdrant_data_dir }}:/qdrant/storage"
+      # :rw explicit — qdrant runs as uid 1000 and must write its storage
+      - "{{ qdrant_data_dir }}:/qdrant/storage:rw"
       - "{{ rag_tls_dir }}:/etc/rag-tls:ro"
     environment:
       QDRANT__SERVICE__API_KEY: "${QDRANT_API_KEY}"
@@ -28,13 +29,17 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=256m
+      # snapshots dir lives at ./snapshots (container workdir), outside the
+      # storage mount; read_only rootfs panics qdrant without this
+      - /qdrant/snapshots:size=256m,uid=1000,gid=1000
     deploy:
       resources:
         limits:
           memory: "{{ qdrant_memory_limit }}"
           cpus: "{{ qdrant_cpu_limit }}"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/healthz"]
+      # qdrant image ships no wget/curl; use bash /dev/tcp against the REST port
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -160,7 +165,11 @@ services:
       dockerfile: Dockerfile
     container_name: "${COMPOSE_PROJECT_NAME}-worker"
     restart: unless-stopped
-    command: ["python", "-m", "workers.ingestion"]
+    # Image ENTRYPOINT is the uvicorn server; the worker needs a clean override
+    entrypoint: ["python", "-m", "workers.ingestion"]
+    # Image HEALTHCHECK probes :8000 (API-only); the worker has no HTTP server
+    healthcheck:
+      disable: true
     env_file:
       - .env
     environment:

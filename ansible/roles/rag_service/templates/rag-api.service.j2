@@ -22,7 +22,8 @@ ExecReload=/usr/bin/docker compose -p {{ rag_compose_project }} up -d --remove-o
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+# tmpfs, not true: docker CLI needs a writable $HOME (/root/.docker)
+ProtectHome=tmpfs
 ReadWritePaths={{ rag_app_dir }} {{ qdrant_data_dir }} {{ minio_data_dir }} {{ rag_audit_log_dir }} /var/lib/docker /var/run
 
 [Install]

@@ -7,7 +7,10 @@
 rag_app_dir: /opt/jol/rag
 rag_compose_project: "jol-rag"
 rag_api_port: 8000
-rag_api_bind: "127.0.0.1"
+# Bind on the VLAN interface; access is restricted to 10.40.40.0/24 by UFW
+# (role tasks). 127.0.0.1 would make the health endpoint unreachable from the
+# network despite the firewall rule.
+rag_api_bind: "0.0.0.0"
 
 # --- Qdrant ---
 qdrant_version: "v1.14.1"

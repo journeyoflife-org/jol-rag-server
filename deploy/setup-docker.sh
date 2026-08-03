@@ -111,18 +111,16 @@ cat > "${DAEMON_JSON}" <<'EOF'
 }
 EOF
 
-# --- Configure Docker service hardening (systemd override) ---
+# NOTE: Do NOT apply systemd namespace hardening (ProtectSystem=strict,
+# NoNewPrivileges, ...) to docker.service itself — runc inherits the daemon's
+# mount namespace and every container start fails with
+# 'exec: executable file not found in $PATH'. Daemon hardening lives in
+# daemon.json above; unit-level hardening belongs on jol-rag.service instead.
 SYSTEMD_OVERRIDE="/etc/systemd/system/docker.service.d"
-mkdir -p "${SYSTEMD_OVERRIDE}"
-cat > "${SYSTEMD_OVERRIDE}/hardening.conf" <<'EOF'
-# CIS Docker Benchmark — systemd hardening
-[Service]
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-PrivateTmp=true
-ReadWritePaths=/var/lib/docker /var/run
-EOF
+if [[ -f "${SYSTEMD_OVERRIDE}/hardening.conf" ]]; then
+  log "Removing broken docker.service hardening drop-in (breaks container start)..."
+  rm -f "${SYSTEMD_OVERRIDE}/hardening.conf"
+fi
 
 # --- Restart Docker to apply configuration ---
 log "Restarting Docker daemon..."
