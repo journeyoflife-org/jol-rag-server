@@ -22,9 +22,7 @@ AUDIT_LOG_PATH = "/tmp/test-audit.jsonl"
 class TestAuditLogGeneration:
     """Verify audit events are written for API operations."""
 
-    def test_query_generates_audit_event(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_query_generates_audit_event(self, client: TestClient, auth_headers: dict) -> None:
         """POST /query must generate an audit log entry."""
         with patch("app.routers.query.get_pipeline") as mock_pipeline:
             from datetime import UTC, datetime
@@ -82,9 +80,7 @@ class TestAuditLogGeneration:
 
         # Find the failure event
         failure_events = [
-            json.loads(line)
-            for line in lines
-            if json.loads(line).get("outcome") == "failure"
+            json.loads(line) for line in lines if json.loads(line).get("outcome") == "failure"
         ]
         assert len(failure_events) >= 1, "No failure audit event recorded"
 
@@ -92,9 +88,7 @@ class TestAuditLogGeneration:
 class TestPseudonymisation:
     """Verify user IDs are HMAC-pseudonymised in audit logs."""
 
-    def test_user_id_is_not_plaintext(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_user_id_is_not_plaintext(self, client: TestClient, auth_headers: dict) -> None:
         """Audit log must NOT contain the raw user ID from the JWT."""
         with patch("app.routers.query.get_pipeline") as mock_pipeline:
             from datetime import UTC, datetime
@@ -125,9 +119,7 @@ class TestPseudonymisation:
             "Raw user ID found in audit log — pseudonymisation failure!"
         )
 
-    def test_user_id_is_hex_hash(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_user_id_is_hex_hash(self, client: TestClient, auth_headers: dict) -> None:
         """Pseudonymised user ID must be a hex string (HMAC output)."""
         with patch("app.routers.query.get_pipeline") as mock_pipeline:
             from datetime import UTC, datetime
@@ -162,9 +154,7 @@ class TestPseudonymisation:
 class TestAuditRecordStructure:
     """Verify audit records contain all required compliance fields."""
 
-    def test_audit_record_has_required_fields(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_audit_record_has_required_fields(self, client: TestClient, auth_headers: dict) -> None:
         """Each audit record must carry the mandatory compliance fields."""
         with patch("app.routers.query.get_pipeline") as mock_pipeline:
             from datetime import UTC, datetime

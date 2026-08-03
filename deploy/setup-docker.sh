@@ -22,6 +22,7 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
 source /etc/os-release
 if [[ "${VERSION_ID}" != "24.04" ]]; then
   log "WARNING: Expected Ubuntu 24.04, got ${VERSION_ID}. Proceeding anyway."
@@ -50,6 +51,7 @@ fi
 
 DOCKER_REPO="/etc/apt/sources.list.d/docker.list"
 ARCH="$(dpkg --print-architecture)"
+# shellcheck source=/dev/null
 CODENAME="$(. /etc/os-release && echo "${VERSION_CODENAME}")"
 echo "deb [arch=${ARCH} signed-by=${DOCKER_KEYRING}] https://download.docker.com/linux/ubuntu ${CODENAME} stable" > "${DOCKER_REPO}"
 

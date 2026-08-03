@@ -65,21 +65,15 @@ class TestPerUserRoleLimiting:
             mock_ds.return_value = mock_doc_service
 
             for _ in range(2):
-                ok = client.delete(
-                    "/admin/documents/doc-rate-001", headers=auth_headers
-                )
+                ok = client.delete("/admin/documents/doc-rate-001", headers=auth_headers)
                 assert ok.status_code == 200
 
-            limited = client.delete(
-                "/admin/documents/doc-rate-001", headers=auth_headers
-            )
+            limited = client.delete("/admin/documents/doc-rate-001", headers=auth_headers)
 
         assert limited.status_code == 429
         assert limited.headers.get("Retry-After") == "60"
 
-    def test_unauthenticated_requests_not_subject_to_role_limit(
-        self, client: TestClient
-    ) -> None:
+    def test_unauthenticated_requests_not_subject_to_role_limit(self, client: TestClient) -> None:
         """Missing token yields 401/403 from auth, never 429."""
         response = client.delete("/admin/documents/doc-rate-002")
         assert response.status_code in (401, 403)
@@ -104,9 +98,7 @@ class TestGDPRCacheCascade:
             mock_doc_service.delete_raw_document.return_value = 1
             mock_ds.return_value = mock_doc_service
 
-            response = client.delete(
-                "/admin/documents/doc-cache-001", headers=auth_headers
-            )
+            response = client.delete("/admin/documents/doc-cache-001", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()

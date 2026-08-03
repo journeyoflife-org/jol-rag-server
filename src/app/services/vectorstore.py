@@ -190,9 +190,7 @@ class VectorStoreService:
                 "retention_flag": metadata.get("retention_flag", False) if metadata else False,
                 **(metadata or {}),
             }
-            points.append(
-                PointStruct(id=point_id, vector=embedding, payload=payload)
-            )
+            points.append(PointStruct(id=point_id, vector=embedding, payload=payload))
 
         try:
             with QDRANT_LATENCY.labels(operation="upsert").time():
@@ -240,8 +238,7 @@ class VectorStoreService:
         qdrant_filter = None
         if filters:
             conditions = [
-                FieldCondition(key=k, match=MatchValue(value=v))
-                for k, v in filters.items()
+                FieldCondition(key=k, match=MatchValue(value=v)) for k, v in filters.items()
             ]
             qdrant_filter = Filter(must=conditions)
 
@@ -303,9 +300,7 @@ class VectorStoreService:
             Number of points deleted.
         """
         client = self._get_client()
-        filter_cond = Filter(
-            must=[FieldCondition(key="user_id", match=MatchValue(value=user_id))]
-        )
+        filter_cond = Filter(must=[FieldCondition(key="user_id", match=MatchValue(value=user_id))])
 
         count_result = client.count(
             collection_name=self._settings.qdrant_collection,

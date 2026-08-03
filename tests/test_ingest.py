@@ -17,9 +17,7 @@ from fastapi.testclient import TestClient
 class TestIngestEndpoint:
     """Test POST /ingest endpoint behaviour."""
 
-    def test_ingest_with_content_returns_201(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_ingest_with_content_returns_201(self, client: TestClient, auth_headers: dict) -> None:
         """Valid ingestion with inline content returns 201."""
         with patch("app.routers.ingest.get_pipeline") as mock_pipeline:
             mock_pipe = MagicMock()
@@ -84,9 +82,7 @@ class TestIngestEndpoint:
         )
         assert response.status_code == 422
 
-    def test_ingest_with_metadata(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_ingest_with_metadata(self, client: TestClient, auth_headers: dict) -> None:
         """Ingestion with metadata passes metadata through."""
         with patch("app.routers.ingest.get_pipeline") as mock_pipeline:
             mock_pipe = MagicMock()

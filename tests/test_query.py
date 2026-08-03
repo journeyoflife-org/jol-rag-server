@@ -53,9 +53,7 @@ class TestQueryEndpoint:
         assert len(data["sources"]) == 1
         assert data["sources"][0]["document_id"] == "doc-001"
 
-    def test_query_empty_question_returns_422(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_query_empty_question_returns_422(self, client: TestClient, auth_headers: dict) -> None:
         """Empty question string returns 422 validation error."""
         response = client.post(
             "/query",

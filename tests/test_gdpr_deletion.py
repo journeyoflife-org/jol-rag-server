@@ -17,9 +17,7 @@ from fastapi.testclient import TestClient
 class TestDocumentDeletion:
     """Test DELETE /admin/documents/{document_id}."""
 
-    def test_delete_document_returns_200(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_delete_document_returns_200(self, client: TestClient, auth_headers: dict) -> None:
         """Successful document deletion returns 200 with counts."""
         with (
             patch("app.routers.admin.get_vectorstore_service") as mock_vs,
@@ -82,9 +80,7 @@ class TestDocumentDeletion:
 class TestUserDeletion:
     """Test DELETE /admin/users/{user_id}."""
 
-    def test_delete_user_data_returns_200(
-        self, client: TestClient, auth_headers: dict
-    ) -> None:
+    def test_delete_user_data_returns_200(self, client: TestClient, auth_headers: dict) -> None:
         """Successful user data deletion returns 200."""
         with patch("app.routers.admin.get_vectorstore_service") as mock_vs:
             mock_vectorstore = MagicMock()
@@ -101,9 +97,7 @@ class TestUserDeletion:
         assert data["deleted_embeddings"] == 12
         assert data["status"] == "completed"
 
-    def test_delete_user_requires_admin(
-        self, client: TestClient, analyst_headers: dict
-    ) -> None:
+    def test_delete_user_requires_admin(self, client: TestClient, analyst_headers: dict) -> None:
         """Analyst role cannot delete user data (403)."""
         response = client.delete(
             "/admin/users/user-99999",

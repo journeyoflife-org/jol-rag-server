@@ -63,10 +63,7 @@ class LLMService:
                     if self._settings.rag_tls_ca_cert
                     else True,
                 }
-                if (
-                    self._settings.rag_tls_client_cert
-                    and self._settings.rag_tls_client_key
-                ):
+                if self._settings.rag_tls_client_cert and self._settings.rag_tls_client_key:
                     tls_kwargs["cert"] = (
                         str(self._settings.rag_tls_client_cert),
                         str(self._settings.rag_tls_client_key),

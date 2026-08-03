@@ -32,8 +32,7 @@ APP_VERSION = "1.0.0"
     response_model=HealthResponse,
     summary="Liveness probe",
     description=(
-        "Returns 200 if the application process is running. "
-        "Kubernetes liveness probe compatible."
+        "Returns 200 if the application process is running. Kubernetes liveness probe compatible."
     ),
 )
 async def health_check() -> HealthResponse:
