@@ -64,6 +64,24 @@
     from_ip: "10.40.40.0/24"
     comment: "Qdrant vector DB — internal VLAN 40 only"
 
+# SSH management path is via pve-prod-hv01 ProxyJump, whose connection
+# originates from 10.40.40.1 (vmbr1) — inside the allowed subnet.
+- name: Allow SSH from internal network
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    from_ip: "10.40.40.0/24"
+    comment: "SSH — internal VLAN 40 only (incl. pve ProxyJump)"
+
+# Must come after all allow rules above — default-deny would otherwise
+# lock out the Ansible control connection.
+- name: Enable UFW with default-deny incoming
+  community.general.ufw:
+    state: enabled
+    default: deny
+    direction: incoming
+
 # --- Deploy Docker Compose file ---
 - name: Deploy docker-compose.yml
   ansible.builtin.template:
