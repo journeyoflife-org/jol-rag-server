@@ -1,0 +1,132 @@
+# =============================================================================
+# rag_service role — Main tasks
+# Provisions directories, firewall rules, Docker Compose stack, and systemd unit.
+# =============================================================================
+---
+- name: Create application directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ rag_app_dir }}"
+    - "{{ rag_audit_log_dir }}"
+    - "{{ rag_raw_docs_dir }}"
+    - "{{ rag_backup_dir }}"
+    - "{{ rag_tls_dir }}"
+
+- name: Create audit log directory with restricted permissions
+  ansible.builtin.file:
+    path: "{{ rag_audit_log_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Create raw documents directory
+  ansible.builtin.file:
+    path: "{{ rag_raw_docs_dir }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0750"
+
+# --- Firewall rules (UFW) ---
+- name: Allow RAG API port from internal network
+  community.general.ufw:
+    rule: allow
+    port: "{{ rag_api_port | string }}"
+    proto: tcp
+    from_ip: "10.40.40.0/24"
+    comment: "RAG API — internal VLAN 40 only"
+
+- name: Allow Qdrant port from internal network
+  community.general.ufw:
+    rule: allow
+    port: "{{ qdrant_port | string }}"
+    proto: tcp
+    from_ip: "10.40.40.0/24"
+    comment: "Qdrant vector DB — internal VLAN 40 only"
+
+# --- Deploy Docker Compose file ---
+- name: Deploy docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ rag_app_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restart rag stack
+
+# --- Deploy environment file template ---
+- name: Deploy .env.example (no secrets)
+  ansible.builtin.template:
+    src: env.example.j2
+    dest: "{{ rag_app_dir }}/.env.example"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check if .env exists
+  ansible.builtin.stat:
+    path: "{{ rag_app_dir }}/.env"
+  register: rag_env_file
+
+- name: Create .env from example if missing
+  ansible.builtin.copy:
+    src: "{{ rag_app_dir }}/.env.example"
+    dest: "{{ rag_app_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+    remote_src: true
+  when: not rag_env_file.stat.exists
+
+# --- Deploy systemd service unit ---
+- name: Deploy systemd service for RAG stack
+  ansible.builtin.template:
+    src: rag-api.service.j2
+    dest: /etc/systemd/system/jol-rag.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart rag stack
+
+- name: Enable and start RAG service
+  ansible.builtin.systemd:
+    name: jol-rag
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# --- Deploy backup cron job ---
+- name: Install backup cron job
+  ansible.builtin.cron:
+    name: "jol-rag-backup"
+    minute: "30"
+    hour: "2"
+    job: "{{ rag_app_dir }}/scripts/backup-qdrant.sh >> {{ rag_audit_log_dir }}/backup.log 2>&1"
+    user: root
+    state: present
+
+# --- Deploy application source (rsync from control node) ---
+- name: Synchronise RAG application source
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../src/"
+    dest: "{{ rag_app_dir }}/src/"
+    delete: true
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=.pytest_cache"
+  notify: restart rag stack
+
+# --- Deploy monitoring assets (filebeat config for SIEM shipping) ---
+- name: Synchronise monitoring assets
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../monitoring/"
+    dest: "{{ rag_app_dir }}/monitoring/"
+    delete: true

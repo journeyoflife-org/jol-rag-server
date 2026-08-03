@@ -29,6 +29,9 @@ env/
 *.pfx
 tls/ca/
 tls/certs/
+tls-certs/
+logs/
+data/
 
 # --- Backups & data ---
 *.age

@@ -1,0 +1,28 @@
+# =============================================================================
+# Ansible playbook — Provision RAG services on rag-prod-lt01
+# Deploys Docker Compose stack (Qdrant, MinIO, FastAPI RAG API, Redis, Worker)
+#
+# Usage:
+#   cd ansible/
+#   ansible-playbook -i inventory/production.yml provision-rag.yml --limit rag-prod-lt01
+#
+# SOC 2 CC8.1 — changes must be reviewed and merged before execution.
+# =============================================================================
+---
+- name: Provision RAG services on rag-prod-lt01
+  hosts: rag-prod-lt01
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Verify target host is rag-prod-lt01
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "rag-prod-lt01"
+          - ansible_host == "10.40.40.10"
+        fail_msg: "This playbook must only run against rag-prod-lt01 (10.40.40.10)"
+        success_msg: "Target verified: {{ inventory_hostname }} ({{ ansible_host }})"
+
+  roles:
+    - role: rag_service
+      tags: [rag, deploy]

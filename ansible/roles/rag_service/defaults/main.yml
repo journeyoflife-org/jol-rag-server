@@ -1,0 +1,68 @@
+# =============================================================================
+# rag_service role — Default variables
+# Override via host_vars, group_vars, or playbook vars.
+# =============================================================================
+---
+# --- Application ---
+rag_app_dir: /opt/jol/rag
+rag_compose_project: "jol-rag"
+rag_api_port: 8000
+rag_api_bind: "127.0.0.1"
+
+# --- Qdrant ---
+qdrant_version: "v1.14.1"
+qdrant_port: 6333
+qdrant_grpc_port: 6334
+qdrant_data_dir: /var/lib/qdrant
+qdrant_collection_name: "jol-documents"
+qdrant_vector_size: 384
+
+# --- MinIO ---
+minio_version: "latest"
+minio_api_port: 9000
+minio_console_port: 9001
+minio_data_dir: /var/lib/minio
+minio_bucket_documents: "jol-documents"
+minio_bucket_embeddings: "jol-embeddings"
+
+# --- Redis ---
+redis_version: "7-alpine"
+redis_port: 6379
+
+# --- Embedding Model ---
+embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+embedding_dimension: 384
+
+# --- LLM (Ollama on llm-prod-lt01) ---
+ollama_endpoint: "http://10.30.30.10:11434/v1"
+ollama_model: "mistral-7b-instruct"
+
+# --- Security ---
+rag_jwt_algorithm: "HS256"
+rag_audit_log_dir: /var/log/jol-rag
+rag_raw_docs_dir: /data/raw_docs
+
+# --- Internal mTLS (enable after deploying certs from scripts/tls/) ---
+rag_internal_tls_enabled: "false"
+rag_tls_dir: "{{ rag_app_dir }}/tls-certs"
+
+# --- SIEM shipping (filebeat, compose profile 'siem') ---
+filebeat_version: "8.17.0"
+siem_logstash_host: "siem.jol.internal:5044"
+
+# --- Resource limits ---
+rag_api_memory_limit: "4g"
+rag_api_cpu_limit: "2.0"
+qdrant_memory_limit: "8g"
+qdrant_cpu_limit: "2.0"
+minio_memory_limit: "2g"
+redis_memory_limit: "512m"
+
+# --- Firewall (additional ports for RAG host) ---
+rag_ufw_extra_ports:
+  - "{{ rag_api_port }}"
+  - "{{ qdrant_port }}"
+
+# --- Backup ---
+rag_backup_dir: /var/backups/jol-rag
+rag_backup_retention_days: 30

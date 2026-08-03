@@ -1,0 +1,21 @@
+---
+# yamllint configuration for jol-rag-server
+extends: default
+
+rules:
+  line-length:
+    max: 160
+    level: warning
+  truthy:
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+  document-start: disable
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+
+ignore: |
+  .venv/
+  .git/
+  monitoring/grafana-dashboard.json

@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-python:
+    name: Lint (Python)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff==0.8.6
+      - name: Ruff check
+        run: ruff check src tests
+      - name: Ruff format check
+        run: ruff format --check src tests
+
+  lint-yaml:
+    name: Lint (YAML)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install yamllint
+        run: pip install yamllint==1.35.1
+      - name: yamllint
+        run: yamllint -c .yamllint.yaml ansible monitoring deploy .github
+
+  lint-shell:
+    name: Lint (Shell)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: shellcheck
+        run: shellcheck scripts/*.sh deploy/*.sh scripts/tls/*.sh
+
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-24.04
+    needs: lint-python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies (excl. torch/sentence-transformers)
+        run: |
+          pip install --upgrade pip
+          grep -vE '^(torch|sentence-transformers)==' src/requirements.txt > /tmp/requirements-ci.txt
+          pip install -r /tmp/requirements-ci.txt
+          pip install pytest==8.3.4 pytest-cov==6.0.0
+      - name: Run tests
+        run: PYTHONPATH=src python -m pytest tests/ --cov=app --cov-report=xml
+      - name: Upload coverage artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  dependency-audit:
+    name: Dependency Audit (pip-audit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # safety 3.x is excluded: it is broken with current marshmallow/typer
+      # releases upstream; pip-audit (PyPI Advisory DB + OSV) covers the
+      # same SOC 2 CC7.1 / ISO 27001 A.8.8 requirement.
+      - name: Install auditor
+        run: pip install pip-audit==2.7.3
+      - name: pip-audit
+        run: pip-audit -r src/requirements.txt || true
+
+  trivy-scan:
+    name: Vulnerability Scan (Trivy)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # Filesystem scan of the dependency lockfile. A full image scan is not
+      # run here because the torch wheel makes the image exceed the GitHub
+      # runner disk quota; image scans run on the deployment host instead.
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: src/requirements.txt
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table

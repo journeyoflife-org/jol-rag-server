@@ -1,0 +1,135 @@
+---
+# =============================================================================
+# harden-ollama-host.yml — Hardening for llm-prod-lt01 (Ollama host)
+#
+# Extends fleet hardening with LLM-specific controls:
+#   1. Bind Ollama to loopback only (no direct LAN exposure)
+#   2. nginx mTLS-terminating reverse proxy (port 8443) — clients must
+#      present a certificate signed by the JOL internal CA (rag-api)
+#   3. UFW: allow 8443 only from the AI-services segment (VLAN 40)
+#   4. auditd rules for Ollama config/models, API-key rotation reminder
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory/production.yml \
+#     ansible/harden-ollama-host.yml --limit llm-prod-lt01
+#
+# GDPR Art. 32 — Security of processing
+# ISO 27001 A.13.1 — Network security management
+# =============================================================================
+
+- name: Harden Ollama host (llm-prod-lt01)
+  hosts: llm
+  become: true
+  vars:
+    ollama_proxy_port: 8443
+    ollama_tls_dir: /etc/ollama-tls
+    allowed_rag_subnet: "10.40.40.0/24"
+
+  tasks:
+    - name: Ensure Ollama binds to loopback only
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/system/ollama.service.d/override.conf
+        create: true
+        mode: "0644"
+        insertafter: EOF
+        line: "{{ item }}"
+      loop:
+        - "[Service]"
+        - 'Environment="OLLAMA_HOST=127.0.0.1:11434"'
+      notify: Restart ollama
+
+    - name: Create TLS directory for the mTLS proxy
+      ansible.builtin.file:
+        path: "{{ ollama_tls_dir }}"
+        state: directory
+        mode: "0750"
+
+    - name: Install nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+
+    - name: Deploy nginx mTLS reverse proxy for Ollama
+      ansible.builtin.copy:
+        dest: /etc/nginx/sites-available/ollama-mtls
+        mode: "0640"
+        content: |
+          server {
+              listen {{ ollama_proxy_port }} ssl;
+              server_name llm-prod-lt01;
+
+              ssl_certificate     {{ ollama_tls_dir }}/ollama-proxy-server.crt;
+              ssl_certificate_key {{ ollama_tls_dir }}/ollama-proxy-server.key;
+              ssl_client_certificate {{ ollama_tls_dir }}/ca.crt;
+              ssl_verify_client on;
+              ssl_protocols TLSv1.3;
+
+              location / {
+                  proxy_pass http://127.0.0.1:11434;
+                  proxy_set_header Host $host;
+                  proxy_read_timeout 300s;
+              }
+          }
+      notify: Reload nginx
+
+    - name: Enable the Ollama mTLS site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/ollama-mtls
+        dest: /etc/nginx/sites-enabled/ollama-mtls
+        state: link
+      notify: Reload nginx
+
+    - name: Remove default nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+
+    - name: UFW — allow mTLS proxy only from AI-services segment
+      community.general.ufw:
+        rule: allow
+        port: "{{ ollama_proxy_port | string }}"
+        proto: tcp
+        src: "{{ allowed_rag_subnet }}"
+
+    - name: UFW — deny direct Ollama port from everywhere
+      community.general.ufw:
+        rule: deny
+        port: "11434"
+        proto: tcp
+
+    - name: auditd — watch Ollama TLS material and models
+      ansible.builtin.copy:
+        dest: /etc/audit/rules.d/ollama.rules
+        mode: "0640"
+        content: |
+          -w {{ ollama_tls_dir }} -p rwxa -k ollama_tls
+          -w /usr/share/ollama/.ollama -p wa -k ollama_models
+      notify: Reload auditd
+
+    - name: MOTD reminder — rotate client certificates yearly
+      ansible.builtin.copy:
+        dest: /etc/update-motd.d/95-ollama-mtls
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "Reminder: Ollama mTLS client certs (rag-api-client) rotate yearly."
+          echo "See jol-rag-server docs/runbook.md — certificate-renewal."
+
+  handlers:
+    - name: Restart ollama
+      ansible.builtin.systemd:
+        name: ollama
+        state: restarted
+        daemon_reload: true
+
+    - name: Reload nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+    - name: Reload auditd
+      ansible.builtin.systemd:
+        name: auditd
+        state: restarted
