@@ -92,17 +92,19 @@ jobs:
       - name: pip-audit
         run: pip-audit -r src/requirements.txt || true
 
-  trivy-image:
-    name: Container Image Scan (Trivy)
+  trivy-scan:
+    name: Vulnerability Scan (Trivy)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Build image
-        run: docker build -t jol-rag-api:ci src/
-      - name: Trivy scan
+      # Filesystem scan of the dependency lockfile. A full image scan is not
+      # run here because the torch wheel makes the image exceed the GitHub
+      # runner disk quota; image scans run on the deployment host instead.
+      - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: jol-rag-api:ci
+          scan-type: fs
+          scan-ref: src/requirements.txt
           severity: HIGH,CRITICAL
           exit-code: "1"
           format: table
