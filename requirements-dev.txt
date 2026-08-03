@@ -12,8 +12,9 @@ mypy==1.14.1
 yamllint==1.35.1
 
 # --- Dependency Auditing (SOC 2 CC7.1 / ISO 27001 A.12.6) ---
+# safety is intentionally omitted: safety 3.x is broken upstream with
+# current typer/marshmallow releases; pip-audit covers the same requirement.
 pip-audit==2.7.3
-safety==3.2.14
 
 # --- Load Testing ---
 locust==2.32.6

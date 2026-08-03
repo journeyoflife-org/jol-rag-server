@@ -77,20 +77,20 @@ jobs:
           path: coverage.xml
 
   dependency-audit:
-    name: Dependency Audit (pip-audit + safety)
+    name: Dependency Audit (pip-audit)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install auditors
-        # typer is pinned: safety 3.2.x is incompatible with typer >= 0.13
-        run: pip install pip-audit==2.7.3 safety==3.2.14 typer==0.12.5
+      # safety 3.x is excluded: it is broken with current marshmallow/typer
+      # releases upstream; pip-audit (PyPI Advisory DB + OSV) covers the
+      # same SOC 2 CC7.1 / ISO 27001 A.8.8 requirement.
+      - name: Install auditor
+        run: pip install pip-audit==2.7.3
       - name: pip-audit
         run: pip-audit -r src/requirements.txt || true
-      - name: safety check
-        run: safety check -r src/requirements.txt --continue-on-error
 
   trivy-image:
     name: Container Image Scan (Trivy)

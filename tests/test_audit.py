@@ -115,9 +115,9 @@ class TestPseudonymisation:
         content = Path(AUDIT_LOG_PATH).read_text()
 
         # The raw user ID "test-user-001" must NOT appear in the audit log
-        assert "test-user-001" not in content, (
-            "Raw user ID found in audit log — pseudonymisation failure!"
-        )
+        assert (
+            "test-user-001" not in content
+        ), "Raw user ID found in audit log — pseudonymisation failure!"
 
     def test_user_id_is_hex_hash(self, client: TestClient, auth_headers: dict) -> None:
         """Pseudonymised user ID must be a hex string (HMAC output)."""
