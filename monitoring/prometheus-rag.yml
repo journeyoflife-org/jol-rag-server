@@ -1,0 +1,76 @@
+# =============================================================================
+# Prometheus scrape configuration — JOL RAG Service
+# Add to the central Prometheus server's prometheus.yml under scrape_configs.
+#
+# Target: rag-prod-lt01 (10.40.40.10), VLAN 40
+# Metrics: application metrics (:8000/metrics) + node-exporter (:9100)
+# =============================================================================
+
+scrape_configs:
+  # --- RAG Application Metrics ---
+  - job_name: "jol-rag-api"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["10.40.40.10:8000"]
+        labels:
+          service: "rag-api"
+          environment: "prod"
+          region: "lt"
+          host: "rag-prod-lt01"
+          compliance: "soc2,gdpr,iso27001"
+
+  # --- Node Exporter (already deployed via Ansible monitoring role) ---
+  - job_name: "jol-rag-node"
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["10.40.40.10:9100"]
+        labels:
+          service: "node-exporter"
+          environment: "prod"
+          region: "lt"
+          host: "rag-prod-lt01"
+
+# =============================================================================
+# Alerting Rules (add to Prometheus rules file)
+# =============================================================================
+# groups:
+#   - name: jol-rag-alerts
+#     rules:
+#       - alert: RAGApiDown
+#         expr: up{job="jol-rag-api"} == 0
+#         for: 2m
+#         labels:
+#           severity: critical
+#           team: ai-services
+#         annotations:
+#           summary: "RAG API is down on rag-prod-lt01"
+#           description: "The RAG API has been unreachable for more than 2 minutes."
+#
+#       - alert: RAGQueryLatencyHigh
+#         expr: histogram_quantile(0.95, rate(rag_pipeline_duration_seconds_bucket[5m])) > 5
+#         for: 5m
+#         labels:
+#           severity: warning
+#           team: ai-services
+#         annotations:
+#           summary: "RAG query p95 latency exceeds 5s"
+#
+#       - alert: RAGQdrantErrors
+#         expr: rate(rag_qdrant_errors_total[5m]) > 0.1
+#         for: 3m
+#         labels:
+#           severity: warning
+#           team: ai-services
+#         annotations:
+#           summary: "Qdrant error rate elevated"
+#
+#       - alert: RAGDiskSpaceCritical
+#         expr: node_filesystem_avail_bytes{mountpoint="/var/lib/qdrant"} / node_filesystem_size_bytes{mountpoint="/var/lib/qdrant"} < 0.1
+#         for: 5m
+#         labels:
+#           severity: critical
+#           team: ai-services
+#         annotations:
+#           summary: "Qdrant data volume > 90% full"

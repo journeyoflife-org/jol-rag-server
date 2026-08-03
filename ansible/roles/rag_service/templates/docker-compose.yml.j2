@@ -1,0 +1,231 @@
+# =============================================================================
+# Docker Compose — JOL RAG Stack (rag-prod-lt01)
+# Managed by Ansible — do not edit manually on production hosts.
+#
+# SOC 2 CC6.1 / GDPR Art. 32 / ISO 27001 A.8.24
+# =============================================================================
+---
+services:
+  qdrant:
+    image: "qdrant/qdrant:{{ qdrant_version }}"
+    container_name: "${COMPOSE_PROJECT_NAME}-qdrant"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:{{ qdrant_port }}:6333"
+      - "127.0.0.1:{{ qdrant_grpc_port }}:6334"
+    volumes:
+      - "{{ qdrant_data_dir }}:/qdrant/storage"
+      - "{{ rag_tls_dir }}:/etc/rag-tls:ro"
+    environment:
+      QDRANT__SERVICE__API_KEY: "${QDRANT_API_KEY}"
+      QDRANT__SERVICE__ENABLE_TLS: "{{ rag_internal_tls_enabled | lower }}"
+      QDRANT__TLS__CERT: "/etc/rag-tls/qdrant-server.crt"
+      QDRANT__TLS__KEY: "/etc/rag-tls/qdrant-server.key"
+      QDRANT__TLS__CA_CERT: "/etc/rag-tls/ca.crt"
+      QDRANT__LOG_LEVEL: "INFO"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    deploy:
+      resources:
+        limits:
+          memory: "{{ qdrant_memory_limit }}"
+          cpus: "{{ qdrant_cpu_limit }}"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - rag-internal
+
+  minio:
+    image: "minio/minio:{{ minio_version }}"
+    container_name: "${COMPOSE_PROJECT_NAME}-minio"
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "127.0.0.1:{{ minio_api_port }}:9000"
+      - "127.0.0.1:{{ minio_console_port }}:9001"
+    volumes:
+      - "{{ minio_data_dir }}:/data"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
+      MINIO_KMS_SECRET_KEY: "jol-rag-key:${MINIO_ENCRYPTION_KEY}"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: "{{ minio_memory_limit }}"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - rag-internal
+
+  redis:
+    image: "redis:{{ redis_version }}"
+    container_name: "${COMPOSE_PROJECT_NAME}-redis"
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "127.0.0.1:{{ redis_port }}:6379"
+    volumes:
+      - redis-data:/data
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    deploy:
+      resources:
+        limits:
+          memory: "{{ redis_memory_limit }}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - rag-internal
+
+  rag-api:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: "${COMPOSE_PROJECT_NAME}-api"
+    restart: unless-stopped
+    ports:
+      - "{{ rag_api_bind }}:{{ rag_api_port }}:8000"
+    env_file:
+      - .env
+    environment:
+      RAG_ENVIRONMENT: "production"
+      QDRANT_HOST: "qdrant"
+      QDRANT_PORT: "6333"
+      MINIO_ENDPOINT: "minio:9000"
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+      OLLAMA_ENDPOINT: "{{ ollama_endpoint }}"
+      EMBEDDING_MODEL: "{{ embedding_model }}"
+      RAG_INTERNAL_TLS_ENABLED: "{{ rag_internal_tls_enabled | lower }}"
+      RAG_TLS_CA_CERT: "/etc/rag-tls/ca.crt"
+      RAG_TLS_CLIENT_CERT: "/etc/rag-tls/rag-api-client.crt"
+      RAG_TLS_CLIENT_KEY: "/etc/rag-tls/rag-api-client.key"
+    volumes:
+      - "{{ rag_audit_log_dir }}:/var/log/rag:rw"
+      - "{{ rag_raw_docs_dir }}:/data/raw_docs:ro"
+      - "{{ rag_tls_dir }}:/etc/rag-tls:ro"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    deploy:
+      resources:
+        limits:
+          memory: "{{ rag_api_memory_limit }}"
+          cpus: "{{ rag_api_cpu_limit }}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - rag-internal
+
+  rag-worker:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: "${COMPOSE_PROJECT_NAME}-worker"
+    restart: unless-stopped
+    command: ["python", "-m", "workers.ingestion"]
+    env_file:
+      - .env
+    environment:
+      RAG_ENVIRONMENT: "production"
+      QDRANT_HOST: "qdrant"
+      QDRANT_PORT: "6333"
+      MINIO_ENDPOINT: "minio:9000"
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+      EMBEDDING_MODEL: "{{ embedding_model }}"
+      RAG_INTERNAL_TLS_ENABLED: "{{ rag_internal_tls_enabled | lower }}"
+      RAG_TLS_CA_CERT: "/etc/rag-tls/ca.crt"
+      RAG_TLS_CLIENT_CERT: "/etc/rag-tls/rag-api-client.crt"
+      RAG_TLS_CLIENT_KEY: "/etc/rag-tls/rag-api-client.key"
+    volumes:
+      - "{{ rag_audit_log_dir }}:/var/log/rag:rw"
+      - "{{ rag_raw_docs_dir }}:/data/raw_docs:ro"
+      - "{{ rag_tls_dir }}:/etc/rag-tls:ro"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    deploy:
+      resources:
+        limits:
+          memory: "{{ rag_api_memory_limit }}"
+          cpus: "{{ rag_api_cpu_limit }}"
+    networks:
+      - rag-internal
+
+  # --- SIEM log shipping (enable with: docker compose --profile siem up -d) ---
+  filebeat:
+    image: "docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
+    container_name: "${COMPOSE_PROJECT_NAME}-filebeat"
+    profiles: ["siem"]
+    restart: unless-stopped
+    user: root
+    command: ["-e", "--strict.perms=false"]
+    environment:
+      SIEM_LOGSTASH_HOST: "{{ siem_logstash_host }}"
+    volumes:
+      - "{{ rag_app_dir }}/monitoring/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro"
+      - "{{ rag_audit_log_dir }}:/var/log/rag:ro"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: "512m"
+    networks:
+      - rag-internal
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  rag-internal:
+    driver: bridge
+    internal: false
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

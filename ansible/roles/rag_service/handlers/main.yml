@@ -1,0 +1,14 @@
+# =============================================================================
+# rag_service role — Handlers
+# =============================================================================
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart rag stack
+  ansible.builtin.command:
+    cmd: docker compose -p {{ rag_compose_project }} up -d --remove-orphans
+    chdir: "{{ rag_app_dir }}"
+  environment:
+    COMPOSE_PROJECT_NAME: "{{ rag_compose_project }}"

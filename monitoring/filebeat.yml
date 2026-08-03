@@ -1,0 +1,46 @@
+# =============================================================================
+# Filebeat configuration — RAG audit log shipping to SIEM
+#
+# Runs as the "filebeat" service in docker-compose (profile: siem).
+# Ships the append-only RAG audit JSONL to the central SIEM endpoint.
+#
+# SOC 2 CC7.2 — Security event monitoring
+# ISO 27001 A.12.4 — Logging and monitoring
+# =============================================================================
+
+filebeat.inputs:
+  - type: filestream
+    id: rag-audit-log
+    paths:
+      - /var/log/rag/audit.jsonl
+    parsers:
+      - ndjson:
+          target: rag_audit
+          add_error_key: true
+    prospector.scanner.check_interval: 10s
+
+processors:
+  - add_host_metadata:
+      netinfo.enabled: false
+  - add_fields:
+      target: event
+      fields:
+        kind: event
+        category: [authentication, process]
+        dataset: jol.rag.audit
+  - drop_fields:
+      fields: [agent, ecs, input, log.offset]
+      ignore_missing: true
+
+output.logstash:
+  hosts: ["${SIEM_LOGSTASH_HOST:siem.jol.internal:5044}"]
+  ssl.verification_mode: full
+  timeout: 30s
+
+logging.level: warning
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 3
+  permissions: 0640

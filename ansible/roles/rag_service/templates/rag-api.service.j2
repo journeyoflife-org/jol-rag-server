@@ -1,0 +1,29 @@
+# =============================================================================
+# systemd service unit — JOL RAG Stack
+# Managed by Ansible — do not edit manually.
+# =============================================================================
+[Unit]
+Description=JOL RAG Service Stack (Docker Compose)
+Documentation=https://github.com/JourneyOfLife/jol-rag-server
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={{ rag_app_dir }}
+EnvironmentFile={{ rag_app_dir }}/.env
+
+ExecStart=/usr/bin/docker compose -p {{ rag_compose_project }} up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -p {{ rag_compose_project }} down --timeout 30
+ExecReload=/usr/bin/docker compose -p {{ rag_compose_project }} up -d --remove-orphans
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ rag_app_dir }} {{ qdrant_data_dir }} {{ minio_data_dir }} {{ rag_audit_log_dir }} /var/lib/docker /var/run
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+---
+# =============================================================================
+# Ansible inventory — jol-rag-server deployment targets
+# SSH via bastion ProxyJump; key-only authentication (no passwords in repo).
+# =============================================================================
+
+all:
+  children:
+    rag:
+      hosts:
+        rag-prod-lt01:
+          ansible_host: 10.40.40.10
+          ansible_user: jol-admin
+          ansible_ssh_common_args: >-
+            -o ProxyJump=jol-admin@bastion.jol.internal
+            -o StrictHostKeyChecking=yes
+    llm:
+      hosts:
+        llm-prod-lt01:
+          ansible_host: 10.30.30.10
+          ansible_user: jol-admin
+          ansible_ssh_common_args: >-
+            -o ProxyJump=jol-admin@bastion.jol.internal
+            -o StrictHostKeyChecking=yes

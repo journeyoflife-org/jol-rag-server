@@ -1,0 +1,89 @@
+# Migration Manifest — jol-infrastructure → jol-rag-server
+#
+# Purpose : Audit trail of all assets migrated out of jol-infrastructure
+#           into this dedicated repository (single source of truth for RAG).
+# Date    : 2026-08-02
+# Migrated by: JOL Platform Engineering
+# Scope   : All RAG-specific deployment, configuration, code, docs, and tests.
+#           Shared fleet infrastructure (networking docs, fleet inventory,
+#           baseline hardening roles) intentionally REMAINS in jol-infrastructure.
+#
+# Format: <source in jol-infrastructure>  ->  <destination in jol-rag-server>
+# ==========================================================================
+
+# --- Application code ---
+rag/src/app/__init__.py                     -> src/app/__init__.py
+rag/src/app/main.py                         -> src/app/main.py
+rag/src/app/config.py                       -> src/app/config.py
+rag/src/app/auth.py                         -> src/app/auth.py
+rag/src/app/audit.py                        -> src/app/audit.py
+rag/src/app/models.py                       -> src/app/models.py
+rag/src/app/middleware/__init__.py          -> src/app/middleware/__init__.py
+rag/src/app/middleware/logging.py           -> src/app/middleware/logging.py
+rag/src/app/middleware/rate_limit.py        -> src/app/middleware/rate_limit.py
+rag/src/app/routers/__init__.py             -> src/app/routers/__init__.py
+rag/src/app/routers/health.py               -> src/app/routers/health.py
+rag/src/app/routers/ingest.py               -> src/app/routers/ingest.py
+rag/src/app/routers/query.py                -> src/app/routers/query.py
+rag/src/app/routers/admin.py                -> src/app/routers/admin.py
+rag/src/app/services/__init__.py            -> src/app/services/__init__.py
+rag/src/app/services/documents.py           -> src/app/services/documents.py
+rag/src/app/services/embeddings.py          -> src/app/services/embeddings.py
+rag/src/app/services/llm.py                 -> src/app/services/llm.py
+rag/src/app/services/pipeline.py            -> src/app/services/pipeline.py
+rag/src/app/services/vectorstore.py         -> src/app/services/vectorstore.py
+rag/src/workers/__init__.py                 -> src/workers/__init__.py
+rag/src/workers/ingestion.py                -> src/workers/ingestion.py
+rag/src/Dockerfile                          -> src/Dockerfile
+rag/src/requirements.txt                    -> src/requirements.txt
+
+# --- Deployment ---
+rag/docker-compose.yml                      -> docker-compose.yml
+rag/.env.example                            -> .env.example
+rag/deploy/setup-docker.sh                  -> deploy/setup-docker.sh
+rag/deploy/setup-luks.sh                    -> deploy/setup-luks.sh
+rag/deploy/ansible/provision-rag.yml        -> ansible/provision-rag.yml
+rag/deploy/ansible/roles/rag_service/defaults/main.yml   -> ansible/roles/rag_service/defaults/main.yml
+rag/deploy/ansible/roles/rag_service/handlers/main.yml   -> ansible/roles/rag_service/handlers/main.yml
+rag/deploy/ansible/roles/rag_service/tasks/main.yml      -> ansible/roles/rag_service/tasks/main.yml
+rag/deploy/ansible/roles/rag_service/templates/docker-compose.yml.j2 -> ansible/roles/rag_service/templates/docker-compose.yml.j2
+rag/deploy/ansible/roles/rag_service/templates/env.example.j2        -> ansible/roles/rag_service/templates/env.example.j2
+rag/deploy/ansible/roles/rag_service/templates/rag-api.service.j2    -> ansible/roles/rag_service/templates/rag-api.service.j2
+
+# --- Documentation ---
+rag/README.md                               -> README.md (rewritten as repo root README)
+rag/docs/architecture.md                    -> docs/architecture.md
+rag/docs/api-reference.md                   -> docs/api-reference.md
+rag/docs/compliance-mapping.md              -> docs/compliance-mapping.md
+rag/docs/runbook.md                         -> docs/runbook.md
+docs/servers/rag-prod-lt01.md               -> docs/servers/rag-prod-lt01.md
+
+# --- Operational scripts ---
+rag/scripts/backup-qdrant.sh                -> scripts/backup-qdrant.sh
+rag/scripts/restore-qdrant.sh               -> scripts/restore-qdrant.sh
+rag/scripts/ingest-docs.sh                  -> scripts/ingest-docs.sh
+rag/scripts/harden-kernel.sh                -> scripts/harden-kernel.sh
+
+# --- Monitoring ---
+rag/monitoring/prometheus-rag.yml           -> monitoring/prometheus-rag.yml
+rag/monitoring/grafana-dashboard.json       -> monitoring/grafana-dashboard.json
+
+# --- Tests ---
+rag/tests/conftest.py                       -> tests/conftest.py
+rag/tests/test_auth.py                      -> tests/test_auth.py
+rag/tests/test_ingest.py                    -> tests/test_ingest.py
+rag/tests/test_query.py                     -> tests/test_query.py
+rag/tests/test_gdpr_deletion.py             -> tests/test_gdpr_deletion.py
+rag/tests/test_audit.py                     -> tests/test_audit.py
+
+# --- Removed from jol-infrastructure (tracked) ---
+Makefile                                    -> RAG targets (lint-rag/test-rag/scan-rag) removed
+ansible/group_vars/ai_services.yml          -> RAG-specific variables removed (shared group vars retained)
+
+# --- Intentionally retained in jol-infrastructure (shared, non-RAG-specific) ---
+# inventory/prod/hosts.yml              — fleet inventory (host entry kept for baseline hardening)
+# ansible/playbooks/harden-ai-hosts.yml — shared hardening for all ai_services VMs
+# ansible/group_vars/ai_services.yml    — shared group vars (SSH, time sync, firewall, monitoring)
+# docs/architecture/network-topology.md — fleet-wide topology (VLAN map)
+# docs/architecture/trust-boundaries.md — fleet-wide trust zones
+# docs/network/*                        — physical switch documentation
