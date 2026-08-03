@@ -1,0 +1,46 @@
+[project]
+name = "jol-rag-server"
+version = "1.0.0"
+description = "Journey of Life RAG service — retrieval-augmented generation for the JOL platform (GDPR/SOC2/ISO27001 aligned)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Journey of Life", email = "infra@journeyoflife.org" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --strict-markers"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "PL"]
+ignore = [
+    "PLR0913",
+    "PLR2004",
+    # Lazy imports are intentional: heavy ML deps (sentence-transformers,
+    # qdrant_client models) are loaded on first use to keep startup fast.
+    "PLC0415",
+    # `class X(str, Enum)` kept for Pydantic v2 JSON serialisation compatibility.
+    "UP042",
+    # Document chunking is inherently branchy; acceptable complexity here.
+    "PLR0912",
+    "PLR0917",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLW0603", "ANN"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[tool.coverage.run]
+source = ["src/app"]
