@@ -73,12 +73,18 @@ fi
 # --- Install Docker Compose v2 plugin ---
 COMPOSE_DIR="/usr/local/lib/docker/cli-plugins"
 COMPOSE_BIN="${COMPOSE_DIR}/docker-compose"
+# GitHub release assets use GNU arch names, not dpkg arch names
+case "${ARCH}" in
+  amd64) COMPOSE_ARCH="x86_64" ;;
+  arm64) COMPOSE_ARCH="aarch64" ;;
+  *) COMPOSE_ARCH="${ARCH}" ;;
+esac
 if [[ -f "${COMPOSE_BIN}" ]] && docker compose version 2>/dev/null | grep -q "${COMPOSE_VERSION}"; then
   log "Docker Compose ${COMPOSE_VERSION} already installed."
 else
   log "Installing Docker Compose ${COMPOSE_VERSION}..."
   mkdir -p "${COMPOSE_DIR}"
-  curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${ARCH}" \
+  curl -fsSL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${COMPOSE_ARCH}" \
     -o "${COMPOSE_BIN}"
   chmod +x "${COMPOSE_BIN}"
   log "Docker Compose installed: $(docker compose version)"
