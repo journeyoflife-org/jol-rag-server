@@ -14,6 +14,10 @@
 # =============================================================================
 set -euo pipefail
 
+# Any incidental file created before the explicit chmod/install must be
+# owner-only (defence in depth; install still forces 640 on .env).
+umask 077
+
 VAULT_PATH="${VAULT_PATH:-secret/data/jol/rag/prod}"
 ENV_FILE="${ENV_FILE:-/opt/jol/rag/.env}"
 
