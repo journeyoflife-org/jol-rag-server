@@ -101,6 +101,24 @@ The playbook backs up the env file before mutating anything:
 backup and run `docker compose up -d` in `/opt/jol/rag`, or roll back the
 VM snapshot (`qm rollback 100 <snapshot>`).
 
+### Backup cleanup and shred caveat
+
+Keep the most recent `.env.bak.*` for 24 hours, then shred it:
+
+```bash
+sudo ls -la /opt/jol/rag/.env.bak.*
+sudo shred -u /opt/jol/rag/.env.bak.*   # after the 24h retention window
+```
+
+**Security note:** `shred -u` provides logical deletion only. On Proxmox
+ZFS/LVM-thin storage, physical blocks may persist in snapshots and COW
+deltas. The pre-deployment snapshot (`pre-rag-deploy-20260807-1959`)
+contains the old credential state — delete or re-key it after the 30-day
+retention window; snapshot retention is separate from file retention.
+Compensating control: the playbook's old-password rejection verification
+is the true security gate; a credential recovered from a snapshot is
+already invalid.
+
 ## Troubleshooting
 
 ### Qdrant unreachable
