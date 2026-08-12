@@ -67,6 +67,15 @@ Rotate the Redis password whenever it is suspected exposed (see incident
 **Source of truth:** HashiCorp Vault (`secret/data/jol/rag/prod`).
 **Transport:** Ansible Vault-encrypted vars (`ansible/group_vars/rag/vault.yml`).
 
+> **Status note (2026-08-13, re-audit O-01):** the HashiCorp Vault
+> endpoint is **not yet deployed** in the estate
+> (`vault.jol.internal` does not resolve; no `vault` CLI on the host).
+> Until it is, run rotations in emergency mode (`-e skip_vault_sync=true`)
+> — `.env` is patched directly. When Vault is first stood up, seed the
+> then-current Redis password into `secret/data/jol/rag/prod` before
+> switching back to synced mode. The Ansible Vault vars file remains the
+> only encrypted transport either way.
+
 ### Procedure
 
 ```bash
