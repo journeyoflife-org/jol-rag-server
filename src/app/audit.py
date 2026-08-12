@@ -8,6 +8,7 @@ Every access, modification, and administrative action is logged with:
 - Resource identifier
 - Outcome (success/failure)
 
+SOC 2 CC6.1 — Credential masking in log output
 SOC 2 CC7.1 / CC7.2 — Monitoring and alerting
 ISO 27001 A.12.4 — Logging and monitoring
 GDPR Art. 30 — Records of processing activities
@@ -16,6 +17,7 @@ GDPR Art. 30 — Records of processing activities
 from __future__ import annotations
 
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,12 +27,90 @@ import structlog
 
 from app.config import Settings, get_settings
 
+# --- Credential masking (SOC 2 CC6.1 / GDPR Art. 32) ---
+
+# Matches scheme://user:password@host patterns
+_CRED_URL_RE = re.compile(
+    r"(redis(?:s)?|amqp(?:s)?|http(?:s)?|mongodb(?:\+srv)?|mysql|postgresql)" r"://[^@\s]+@[^@\s]*",
+    re.IGNORECASE,
+)
+
+# Known secret key names — values are masked in any log event
+_SECRET_KEYS = frozenset(
+    {
+        "redis_url",
+        "database_url",
+        "elasticsearch_url",
+        "jwt_secret",
+        "hmac_salt",
+        "minio_root_password",
+        "qdrant_api_key",
+        "redis_password",
+        "minio_encryption_key",
+        "api_key",
+        "password",
+        "secret",
+    }
+)
+
+# Fields that are structurally safe to recurse into (metadata dicts)
+_SAFE_RECURSE_KEYS = frozenset({"details", "extra", "metadata", "payload"})
+
+
+def _mask_secret_value(value: str) -> str:
+    """Redact credential patterns within a string value."""
+    if _CRED_URL_RE.search(value):
+        return _CRED_URL_RE.sub("[REDACTED_URL]", value)
+    return value
+
+
+def _mask_event_dict(
+    event_dict: dict[str, Any],
+    *,
+    top_level: bool = True,
+) -> dict[str, Any]:
+    """Recursively mask secrets in a structlog event dict.
+
+    At the top level, known secret key names have their values replaced.
+    Nested dicts are only traversed for URL-pattern credentials (field
+    names are not checked to avoid false positives in payload data).
+    """
+    for key in list(event_dict):
+        val = event_dict[key]
+        if isinstance(val, str):
+            if top_level and key.lower() in _SECRET_KEYS:
+                event_dict[key] = "[REDACTED]"
+            else:
+                masked = _mask_secret_value(val)
+                if masked != val:
+                    event_dict[key] = "[REDACTED_URL]"
+        elif isinstance(val, dict) and (top_level or key in _SAFE_RECURSE_KEYS):
+            _mask_event_dict(val, top_level=False)
+    return event_dict
+
+
+def _mask_secrets_processor(
+    _logger: Any,
+    _method: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """Structlog processor that redacts credentials before serialisation.
+
+    Catches:
+    - Known secret field names (``redis_url``, ``jwt_secret``, etc.)
+    - URL-embedded credentials (``redis://:pass@host``)
+
+    SOC 2 CC6.1 / GDPR Art. 32 — prevents credential leakage in logs.
+    """
+    return _mask_event_dict(event_dict)
+
 
 def _configure_structlog(settings: Settings) -> None:
     """Configure structlog for JSON output to stdout and audit file."""
     processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
+        _mask_secrets_processor,  # Redact credentials before rendering
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
@@ -96,13 +176,16 @@ class AuditLogger:
         if details:
             record["details"] = details
 
+        # Mask credentials before writing to append-only audit file
+        masked_record = _mask_event_dict(dict(record))
+
         # Write to audit file (append-only)
         try:
             with self._log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                f.write(json.dumps(masked_record, ensure_ascii=False) + "\n")
         except OSError:
-            # Fallback: log to stdout if file write fails
-            self._logger.error("audit_write_failed", record=record)
+            # Fallback: log to stdout if file write fails (already masked)
+            self._logger.error("audit_write_failed", record=masked_record)
 
         # Also emit via structlog for centralised log shipping
         self._logger.info(
