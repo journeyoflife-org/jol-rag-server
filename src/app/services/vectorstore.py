@@ -113,7 +113,10 @@ class VectorStoreService:
         """Lazy-initialise Qdrant client.
 
         When internal TLS is enabled the REST transport uses HTTPS and
-        verifies the server certificate against the internal CA.
+        verifies the server certificate against the internal CA. Otherwise
+        HTTPS is explicitly disabled: qdrant-client silently upgrades to
+        HTTPS whenever an API key is supplied, which breaks connections to
+        plaintext endpoints (SSL WRONG_VERSION_NUMBER).
         """
         if self._client is None:
             kwargs: dict[str, Any] = {
@@ -126,6 +129,8 @@ class VectorStoreService:
                 kwargs["https"] = True
                 if self._settings.rag_tls_ca_cert:
                     kwargs["verify"] = str(self._settings.rag_tls_ca_cert)
+            else:
+                kwargs["https"] = False
             self._client = QdrantClient(**kwargs)
         return self._client
 
