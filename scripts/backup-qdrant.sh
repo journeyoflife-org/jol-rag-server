@@ -25,8 +25,6 @@ RAG_DIR="/opt/jol/rag"
 BACKUP_DIR="/var/backups/jol-rag"
 RETENTION_DAYS=30
 TIMESTAMP="$(date -u '+%Y%m%dT%H%M%SZ')"
-QDRANT_HOST="127.0.0.1"
-QDRANT_PORT="6333"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -51,6 +49,13 @@ if [[ -f "${RAG_DIR}/.env" ]]; then
   source "${RAG_DIR}/.env"
   set +a
 fi
+
+# SECURITY NOTE: .env exports QDRANT_HOST=qdrant (the docker-network alias)
+# for the containerized API. This script runs on the HOST, where that name
+# does not resolve. Force the host-local endpoint AFTER sourcing .env so the
+# container alias can never override it.
+QDRANT_HOST="127.0.0.1"
+QDRANT_PORT="6333"
 
 # Check for age encryption key
 AGE_KEY_FILE="/etc/jol/backup-age-key.txt"
@@ -112,14 +117,17 @@ fi
 # --- Step 4: Encrypt backup ---
 log "Encrypting backup with age..."
 ARCHIVE_NAME="jol-rag-backup-${TIMESTAMP}.tar.gz"
-tar -czf "${WORK_DIR}/${ARCHIVE_NAME}" -C "${WORK_DIR}" . --exclude="${ARCHIVE_NAME}"
+# Stage the archive OUTSIDE ${WORK_DIR}: writing the tar into the directory
+# being archived causes "file changed as we read it" races.
+tar -czf "${BACKUP_DIR}/${ARCHIVE_NAME}" -C "${WORK_DIR}" .
 
 age -r "${AGE_RECIPIENT}" \
   -o "${BACKUP_DIR}/${ARCHIVE_NAME}.age" \
-  "${WORK_DIR}/${ARCHIVE_NAME}"
+  "${BACKUP_DIR}/${ARCHIVE_NAME}"
 
-# Remove unencrypted work directory
+# Remove unencrypted intermediates (work dir + plaintext tar)
 rm -rf "${WORK_DIR}"
+rm -f "${BACKUP_DIR}/${ARCHIVE_NAME}"
 log "Encrypted backup: ${BACKUP_DIR}/${ARCHIVE_NAME}.age"
 
 # --- Step 5: Cleanup old backups ---

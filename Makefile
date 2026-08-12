@@ -11,7 +11,8 @@ PYTEST := $(VENV)/bin/python -m pytest
 RUFF := $(VENV)/bin/ruff
 
 .PHONY: help venv install install-dev lint lint-python lint-yaml lint-shell \
-        test test-cov scan scan-deps scan-image validate certs deploy clean
+        test test-cov scan scan-deps scan-image validate certs deploy \
+        rotate-redis clean
 
 ## help: Show this help
 help:
@@ -77,6 +78,10 @@ certs:
 ## deploy: Deploy to rag-prod-lt01 via Ansible (requires vault-unlocked inventory)
 deploy:
 	ansible-playbook -i ansible/inventory/production.yml ansible/provision-rag.yml --limit rag-prod-lt01
+
+## rotate-redis: Rotate the Redis password (new value from ansible-vault encrypted vars)
+rotate-redis:
+	ansible-playbook -i ansible/inventory/production.yml ansible/rotate-redis-secret.yml --limit rag-prod-lt01 --ask-vault-pass
 
 ## clean: Remove build/test artefacts
 clean:

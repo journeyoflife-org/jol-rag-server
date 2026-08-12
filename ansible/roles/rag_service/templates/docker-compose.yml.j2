@@ -100,7 +100,9 @@ services:
         limits:
           memory: "{{ redis_memory_limit }}"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      # REDISCLI_AUTH keeps the password out of redis-cli argv and suppresses
+      # the "password on command line" warning from container logs.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=${REDIS_PASSWORD} redis-cli ping"]
       interval: 30s
       timeout: 5s
       retries: 3

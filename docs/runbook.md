@@ -59,6 +59,66 @@ cd ansible/
 ansible-playbook -i inventory/production.yml provision-rag.yml --limit rag-prod-lt01
 ```
 
+## Redis Credential Rotation
+
+Rotate the Redis password whenever it is suspected exposed (see incident
+2026-08-07), after personnel change, or on the scheduled rotation cadence.
+
+**Source of truth:** HashiCorp Vault (`secret/data/jol/rag/prod`).
+**Transport:** Ansible Vault-encrypted vars (`ansible/group_vars/rag/vault.yml`).
+
+### Procedure
+
+```bash
+# 1. One-time: create the encrypted vars file
+cp ansible/group_vars/rag/vault.yml.example ansible/group_vars/rag/vault.yml
+ansible-vault encrypt ansible/group_vars/rag/vault.yml
+
+# 2. Set the new password (openssl rand -hex 32)
+ansible-vault edit ansible/group_vars/rag/vault.yml
+
+# 3. Run the rotation playbook (preflight -> Vault sync -> .env re-render
+#    -> ordered restart -> verification -> masked audit record)
+make rotate-redis
+
+# 4. Verify evidence on the host
+tail -1 /var/log/jol-rag/secrets-rotation.log   # fingerprints only, no secrets
+```
+
+### Emergency mode (HashiCorp Vault unreachable)
+
+```bash
+ansible-playbook -i ansible/inventory/production.yml ansible/rotate-redis-secret.yml \
+  --limit rag-prod-lt01 --ask-vault-pass -e skip_vault_sync=true
+# Afterwards, reconcile Vault manually:
+vault kv patch secret/data/jol/rag/prod redis_password=<NEW>
+```
+
+### Rollback
+
+The playbook backs up the env file before mutating anything:
+`/opt/jol/rag/.env.bak.<timestamp>` (mode 0600). To revert, restore the
+backup and run `docker compose up -d` in `/opt/jol/rag`, or roll back the
+VM snapshot (`qm rollback 100 <snapshot>`).
+
+### Backup cleanup and shred caveat
+
+Keep the most recent `.env.bak.*` for 24 hours, then shred it:
+
+```bash
+sudo ls -la /opt/jol/rag/.env.bak.*
+sudo shred -u /opt/jol/rag/.env.bak.*   # after the 24h retention window
+```
+
+**Security note:** `shred -u` provides logical deletion only. On Proxmox
+ZFS/LVM-thin storage, physical blocks may persist in snapshots and COW
+deltas. The pre-deployment snapshot (`pre-rag-deploy-20260807-1959`)
+contains the old credential state — delete or re-key it after the 30-day
+retention window; snapshot retention is separate from file retention.
+Compensating control: the playbook's old-password rejection verification
+is the true security gate; a credential recovered from a snapshot is
+already invalid.
+
 ## Troubleshooting
 
 ### Qdrant unreachable

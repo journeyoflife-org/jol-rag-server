@@ -1,0 +1,20 @@
+# =============================================================================
+# Ansible Vault secrets for the 'rag' group — TEMPLATE (not encrypted)
+#
+# One-time setup (never commit the unencrypted file):
+#   cp ansible/group_vars/rag/vault.yml.example ansible/group_vars/rag/vault.yml
+#   ansible-vault encrypt ansible/group_vars/rag/vault.yml
+#
+# Rotation workflow:
+#   ansible-vault edit ansible/group_vars/rag/vault.yml   # set new value
+#   make rotate-redis                                     # applies on host
+#
+# The encrypted vault.yml may be committed (it is unreadable without the
+# vault password); this .example file documents the expected structure.
+#
+# SOC 2 CC6.1 / ISO 27001 A.8.24 — Secrets management
+# =============================================================================
+---
+# New Redis password; minimum 32 alphanumeric characters.
+# Generate with: openssl rand -hex 32
+vault_redis_password: CHANGE_ME_openssl_rand_hex_32
