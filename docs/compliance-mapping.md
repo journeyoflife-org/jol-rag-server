@@ -55,3 +55,4 @@
 | JWT HS256 (shared secret) | Short expiry (60min); migrate to RS256/OIDC | Post-pilot |
 | Single instance (no HA) | PBS VM backup, documented DR procedure | Scale phase |
 | No WAF on reverse proxy | Rate limiting + input validation in app | Post-pilot |
+| No centralised log shipping (Loki staged; audit F-03) | journald persistence + AIDE + VM backups; `docs/risk-acceptance/RA-2026-001-loki-staged.md` | 2026-11-13 |
