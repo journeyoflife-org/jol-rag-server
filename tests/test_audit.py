@@ -5,6 +5,7 @@ Verifies:
 - User IDs are pseudonymised (HMAC-SHA256)
 - Audit records contain required fields (timestamp, action, user, IP, resource)
 - Audit log is append-only JSONL format
+- Credentials are masked in stdout and JSONL output (SOC 2 CC6.1)
 """
 
 from __future__ import annotations
@@ -195,3 +196,87 @@ class TestAuditRecordStructure:
         # Timestamp must be ISO 8601 UTC
         assert "T" in event["timestamp"]
         assert event["service"] == "jol-rag"
+
+
+class TestCredentialMasking:
+    """Verify credentials are redacted from log output (SOC 2 CC6.1 / GDPR Art. 32).
+
+    Regression coverage for the 2026-08-07 REDIS_URL exposure incident:
+    secrets must never reach stdout logs or the append-only audit JSONL.
+    """
+
+    def test_url_embedded_credentials_are_redacted(self) -> None:
+        """REDIS_URL-style values must be replaced with [REDACTED_URL]."""
+        from app.audit import _mask_secrets_processor
+
+        event = {
+            "event": "cache_connect_failed",
+            "url": "redis://:super-secret-password@redis:6379/0",
+        }
+        masked = _mask_secrets_processor(None, "error", event)
+
+        assert "super-secret-password" not in json.dumps(masked)
+        assert masked["url"] == "[REDACTED_URL]"
+
+    def test_known_secret_key_names_are_redacted(self) -> None:
+        """Fields named like secrets must be masked regardless of value shape."""
+        from app.audit import _mask_secrets_processor
+
+        event = {
+            "event": "config_loaded",
+            "redis_url": "redis://redis:6379/0",  # no credential, still masked
+            "jwt_secret": "eyJhbGciOiJIUzI1NiJ9.payload",
+            "qdrant_api_key": "qd-12345",
+        }
+        masked = _mask_secrets_processor(None, "info", event)
+
+        assert masked["redis_url"] == "[REDACTED]"
+        assert masked["jwt_secret"] == "[REDACTED]"
+        assert masked["qdrant_api_key"] == "[REDACTED]"
+
+    def test_nested_details_dict_is_masked(self) -> None:
+        """URL credentials inside nested metadata dicts must also be caught."""
+        from app.audit import _mask_event_dict
+
+        event = {
+            "event": "upsert_failed",
+            "details": {"error": "cannot reach redis://:leaked-pw@redis:6379/0"},
+        }
+        masked = _mask_event_dict(event)
+
+        assert "leaked-pw" not in json.dumps(masked)
+        assert masked["details"]["error"] == "[REDACTED_URL]"
+
+    def test_non_secret_values_pass_through(self) -> None:
+        """Masking must not corrupt operational (non-secret) log fields."""
+        from app.audit import _mask_secrets_processor
+
+        event = {
+            "event": "query_executed",
+            "document_id": "doc-123",
+            "status": 200,
+            "path": "/query",
+        }
+        masked = _mask_secrets_processor(None, "info", event)
+
+        assert masked["document_id"] == "doc-123"
+        assert masked["status"] == 200
+        assert masked["path"] == "/query"
+
+    def test_audit_jsonl_write_path_masks_credentials(self) -> None:
+        """AuditLogger.log_event must mask secrets before writing the JSONL file."""
+        from app.audit import AuditLogger
+
+        audit = AuditLogger()
+        audit.log_event(
+            action="test.masking",
+            user_id_pseudo="abc123def456",
+            resource_id="res-1",
+            client_ip="10.0.0.1",
+            details={"url": "redis://:file-leak-secret@redis:6379/0"},
+        )
+
+        content = Path(AUDIT_LOG_PATH).read_text()
+        assert "file-leak-secret" not in content
+        event = json.loads(content.splitlines()[-1])
+        assert event["details"]["url"] == "[REDACTED_URL]"
