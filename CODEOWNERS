@@ -1,0 +1,5 @@
+# Code Owners — required reviewers for all changes
+# See GitHub docs: https://docs.github.com/en/repositories/managing-your-repository/defining-the-merge-readiness-of-code-changes
+
+# All changes require security team review
+* @journeyoflife-org/security
