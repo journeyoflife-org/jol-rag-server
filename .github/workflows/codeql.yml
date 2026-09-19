@@ -1,0 +1,50 @@
+# =============================================================================
+# CodeQL Analysis — Static Application Security Testing (SAST)
+# SOC 2 CC7.2 — Anomaly detection via static code analysis
+# ISO 27001 A.12.4 — Logging and monitoring
+# Trigger: push/PR to main, weekly schedule
+# =============================================================================
+name: CodeQL Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly on Monday at 06:00 UTC — catches newly disclosed CVEs
+    - cron: "0 6 * * 1"
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL Analysis (Python)
+    runs-on: ubuntu-latest
+    # GDPR Art.9 PRIMARY app — security-extended queries for maximum coverage
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # security-extended: broader SAST coverage (injections, auth flaws, etc.)
+          # security-and-quality: includes code quality rules
+          queries: security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"

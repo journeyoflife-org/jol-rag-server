@@ -90,7 +90,10 @@ jobs:
       - name: Install auditor
         run: pip install pip-audit==2.7.3
       - name: pip-audit
-        run: pip-audit -r src/requirements.txt || true
+        # H2 remediation: removed '|| true' — pip-audit now blocks on CRITICAL/HIGH vulns
+        # for GDPR Art.9 PRIMARY app. Accepted risks should be documented and ignored via
+        # --ignore-vuln flag.
+        run: pip-audit -r src/requirements.txt --desc
 
   trivy-scan:
     name: Vulnerability Scan (Trivy)
@@ -108,3 +111,29 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           format: table
+
+  lockfile-validation:
+    name: Lockfile Validation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pip-tools
+        run: pip install pip-tools==7.4.1
+      - name: Verify requirements.txt is properly pinned
+        run: |
+          echo "Checking that all dependencies in requirements.txt are pinned..."
+          # Check for unpinned dependencies (lines without ==)
+          if grep -E '^[a-zA-Z0-9_-]+[^=]*$' src/requirements.txt | grep -v '^#' | grep -v '^\s*$' | grep -v '=='; then
+            echo "FAIL: Unpinned dependencies found in requirements.txt"
+            echo "All dependencies must be pinned with == for reproducible builds."
+            exit 1
+          fi
+          echo "PASS: All dependencies are pinned."
+      - name: Generate lockfile hash for cache validation
+        run: |
+          # Create a hash of requirements.txt for cache invalidation
+          sha256sum src/requirements.txt > .requirements-hash
+          echo "Requirements hash: $(cat .requirements-hash)"
