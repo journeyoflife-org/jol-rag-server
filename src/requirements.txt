@@ -4,13 +4,13 @@
 # =============================================================================
 
 # --- Web Framework ---
-fastapi==0.115.6
+fastapi==0.115.12
 uvicorn[standard]==0.34.0
 uvloop==0.21.0
 
 # --- Authentication ---
 pyjwt==2.13.0
-cryptography==48.0.1
+cryptography==50.0.0
 
 # --- Data Validation & Settings ---
 pydantic==2.10.4
@@ -20,7 +20,7 @@ pydantic-settings==2.7.1
 qdrant-client==1.12.1
 
 # --- Embeddings ---
-sentence-transformers==3.3.1
+sentence-transformers==3.4.1
 torch==2.6.0
 numpy==2.2.1
 
