@@ -93,7 +93,13 @@ jobs:
         # H2 remediation: removed '|| true' — pip-audit now blocks on CRITICAL/HIGH vulns
         # for GDPR Art.9 PRIMARY app. Accepted risks should be documented and ignored via
         # --ignore-vuln flag.
-        run: pip-audit -r src/requirements.txt --desc
+        # torch 2.9.1 is the latest available; these CVEs claim fixes in
+        # non-existent versions (2.10.0, 2.13.0) — accepted risk, CPU-only server
+        run: >-
+          pip-audit -r src/requirements.txt --desc
+          --ignore-vuln PYSEC-2026-139
+          --ignore-vuln PYSEC-2026-2286
+          --ignore-vuln GHSA-rrmf-rvhw-rf47
 
   trivy-scan:
     name: Vulnerability Scan (Trivy)
