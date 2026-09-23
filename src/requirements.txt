@@ -10,7 +10,7 @@ uvloop==0.21.0
 
 # --- Authentication ---
 pyjwt==2.13.0
-cryptography==50.0.0
+cryptography==50.0.1
 
 # --- Data Validation & Settings ---
 pydantic==2.10.4
