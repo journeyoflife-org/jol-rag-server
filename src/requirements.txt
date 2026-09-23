@@ -20,7 +20,7 @@ pydantic-settings==2.7.1
 qdrant-client==1.12.1
 
 # --- Embeddings ---
-sentence-transformers==4.0.0
+sentence-transformers==5.2.3
 transformers==5.10.4
 torch==2.6.0
 numpy==2.2.1
