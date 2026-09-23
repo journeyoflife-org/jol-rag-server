@@ -1,0 +1,126 @@
+# =============================================================================
+# Compliance Check — GDPR Art.9 Data Handling Validation
+# GDPR Art.9 — Special category data (religious affiliation) processing controls
+# SOC 2 CC6.1 — Logical access controls for sensitive data
+# ISO 27001 A.8.9 — Configuration management for sensitive data
+# Trigger: PR to main touching sensitive paths
+# =============================================================================
+name: Compliance Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      # Sensitive paths that handle GDPR Art.9 religious data
+      - "src/app/routers/**"
+      - "src/app/services/documents.py"
+      - "src/app/services/vectorstore.py"
+      - "src/app/auth.py"
+      - "src/app/audit.py"
+      - "src/app/config.py"
+      - "src/app/models.py"
+      - "tests/test_gdpr_deletion.py"
+      - "tests/test_audit.py"
+      - "tests/test_auth.py"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: compliance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compliance-check:
+    name: GDPR Art.9 Compliance Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check no raw PII in log statements
+        run: |
+          echo "Checking for raw PII patterns in log statements..."
+          # Scan for patterns that might log sensitive data
+          if grep -rn "logger\.\(info\|debug\|warning\|error\).*password\|logger\.\(info\|debug\|warning\|error\).*token\|logger\.\(info\|debug\|warning\|error\).*secret" src/app/ --include="*.py" | grep -v "# nosec" | grep -v "test_"; then
+            echo "WARNING: Potential PII in log statements detected."
+            echo "Review the above matches — ensure no sensitive data is logged."
+            echo "If intentional (e.g., logging field names, not values), add '# nosec' comment."
+            # Don't fail — just warn. Manual review required.
+          fi
+          echo "PASS: Log statement review complete."
+
+      - name: Verify audit logging is present in data handlers
+        run: |
+          echo "Verifying audit logging in document and vectorstore services..."
+          # GDPR Art.30 requires records of processing activities
+          if ! grep -rn "audit\|AuditLogger\|audit_log" src/app/services/documents.py src/app/services/vectorstore.py --include="*.py"; then
+            echo "FAIL: No audit logging found in document/vectorstore services."
+            echo "GDPR Art.30 requires logging of all data processing activities."
+            exit 1
+          fi
+          echo "PASS: Audit logging references found in data handlers."
+
+      - name: Verify GDPR deletion support
+        run: |
+          echo "Verifying GDPR Art.17 (Right to Erasure) support..."
+          # Art.17 requires ability to delete user data
+          if ! grep -rn "delete\|erase\|remove" src/app/routers/admin.py src/app/services/documents.py --include="*.py" | grep -i "document\|user"; then
+            echo "FAIL: No deletion/erasure functionality found."
+            echo "GDPR Art.17 requires the ability to erase user data."
+            exit 1
+          fi
+          echo "PASS: Deletion/erasure functionality found."
+
+      - name: Verify authentication on sensitive endpoints
+        run: |
+          echo "Verifying authentication on sensitive endpoints..."
+          # Check that routers have authentication decorators/dependencies
+          if ! grep -rn "Depends\|get_current_user\|require_auth\|JWTBearer" src/app/routers/ --include="*.py"; then
+            echo "FAIL: No authentication found on routers."
+            echo "Sensitive endpoints must require authentication."
+            exit 1
+          fi
+          echo "PASS: Authentication dependencies found on routers."
+
+      - name: Run GDPR-specific tests
+        run: |
+          echo "Running GDPR deletion and audit tests..."
+          pip install --upgrade pip
+          grep -vE '^(torch|sentence-transformers)==' src/requirements.txt > /tmp/requirements-ci.txt
+          pip install -r /tmp/requirements-ci.txt
+          pip install pytest==8.3.4 pytest-cov==6.0.0
+          PYTHONPATH=src python -m pytest tests/test_gdpr_deletion.py tests/test_audit.py tests/test_auth.py -v
+
+      - name: Comment on PR with compliance summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const emoji = status === 'success' ? '✅' : '❌';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${emoji} **GDPR Art.9 Compliance Check Complete**
+
+            Review the [CI logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.
+
+            ### Compliance Gates
+            - [ ] No raw PII in log statements
+            - [ ] Audit logging present in data handlers (Art.30)
+            - [ ] GDPR deletion support present (Art.17)
+            - [ ] Authentication on sensitive endpoints
+            - [ ] GDPR-specific tests passing
+
+            **Note**: This repo handles GDPR Art.9 special category data (religious affiliation). All changes to sensitive paths require security team co-approval (CODEOWNERS).`
+            });
