@@ -51,3 +51,7 @@ structlog==24.4.0
 
 # --- Utilities ---
 python-multipart==0.0.30
+
+# --- Transitive Dependency Constraints (security fixes) ---
+starlette>=0.41.4  # PYSEC-2026 fixes
+
