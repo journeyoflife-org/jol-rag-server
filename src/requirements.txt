@@ -4,13 +4,13 @@
 # =============================================================================
 
 # --- Web Framework ---
-fastapi==0.115.12
+fastapi==0.130.0
 uvicorn[standard]==0.34.0
 uvloop==0.21.0
 
 # --- Authentication ---
 pyjwt==2.13.0
-cryptography==50.0.1
+cryptography==50.0.0
 
 # --- Data Validation & Settings ---
 pydantic==2.10.4
@@ -22,7 +22,7 @@ qdrant-client==1.12.1
 # --- Embeddings ---
 sentence-transformers==5.2.3
 transformers==5.10.4
-torch==2.6.0
+torch==2.7.1
 numpy==2.2.1
 
 # --- LLM Client (OpenAI-compatible for Ollama) ---
@@ -51,7 +51,4 @@ structlog==24.4.0
 
 # --- Utilities ---
 python-multipart==0.0.30
-
-# --- Transitive Dependency Constraints (security fixes) ---
-starlette>=0.41.4  # PYSEC-2026 fixes
-
+starlette>=0.49.1  # security: PYSEC-2026-1942 DoS fix
